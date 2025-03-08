@@ -1,0 +1,448 @@
+# -*- coding: utf-8 -*-
+"""
+@author: TVG
+"""
+# CARGA Y LIMPIEZA DE DATOS
+
+# PASO 1. IMPORTAR LAS LIBRERÏAS QUE NECESITAMOS (de forma manual)
+
+
+import os
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer
+
+# PASO 2. CONECTAR CON LA RUTA
+
+def conectar_base():
+    try:
+        ruta = input("Por favor, ingresa la RUTA de la base de datos: ")
+# Comprobar si la ruta existe y si es un directorio
+        if not os.path.exists(ruta) or not os.path.isdir(ruta):
+            raise FileNotFoundError("La ruta proporcionada no es válida o no existe.")
+# Cambiar el directorio de trabajo a la ruta proporcionada
+        os.chdir(ruta)
+# Confirmar que el directorio se ha cambiado correctamente
+        print(f"El directorio actual es ahora: {os.getcwd()}")
+        
+    except FileNotFoundError as e:
+        print(e)
+
+# Llamada a la función
+conectar_base()
+
+
+# PASO 3 CONECTAR CON LA BASE DE DATOS Y HACER UNA COPIA PARA TRABAJAR EN ELLA
+
+def cargar_base(): 
+    archivo_csv = input("Por favor, ingrese el nombre del archivo CSV (incluyendo la extensión .csv): ")
+    print(archivo_csv)
+    try:
+# Leer el archivo CSV y cargarlo en un DataFrame
+        dataframe = pd.read_csv(archivo_csv)
+# Crear una copia del DataFrame
+        data = dataframe.copy()
+        
+        print("Archivo cargado exitosamente.")
+        
+        # Mostrar las primeras filas del archivo cargado (opcional)
+        print(data.head())
+        
+        print("Se han cargado los datos correctamente.")
+        
+    except FileNotFoundError:
+        print(f"El archivo '{archivo_csv}' no se encuentra en el directorio actual.")
+    except pd.errors.EmptyDataError:
+        print(f"El archivo '{archivo_csv}' está vacío.")
+    except Exception as e:
+        print(f"Ocurrió un error: {e}")
+    return data
+# Llamar a la función para probar
+cargar_base()
+data= cargar_base()
+
+# PASO 4 PRIMER CONTACTO CON LOS DATOS
+
+def primer_contacto():
+# Mostrar los nombres de las columnas
+    print("Nombres de las columnas:")
+    print(data.columns)
+    print("\n")
+
+# Mostrar los primeros 10 registros
+    print("Primeros 10 registros:")
+    print(data.head(n=10))
+    print("\n")
+# Mostrar la descripción estadística transpuesta
+    print("Descripción estadística transpuesta:")
+    print(data.describe().T)
+    print("\n")
+# Mostrar el tipo de variable
+    print("Tipo de variable:")
+    print(data.dtypes)
+    print("\n")
+
+# Mostrar las variables en las que hay registros perdidos 
+    print("Valores perdidos:")
+    print(data.isnull().sum())
+    print("\n")
+
+# Llamada a la función
+primer_contacto()
+
+# PASO 5 CORRELACIONES
+
+def correlaciones(data):
+    # Selecciona las variables numéricas del dataframe 
+    data_numeric = data.select_dtypes(include=['number'])
+
+    # Calcula la matriz de correlaciones entre todas las variables numéricas
+    correlation_matrix = data_numeric.corr()
+    
+    # Muestra la matriz de correlaciones en consola
+    print(correlation_matrix)
+
+    # Verificar si estamos en un entorno interactivo (por ejemplo, Jupyter Notebook)
+    if '__file__' in globals():
+        # Si estamos en un script normal, usamos __file__ para obtener la ruta
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+    else:
+        # Si estamos en un entorno interactivo, usamos el directorio de trabajo actual
+        current_dir = os.getcwd()
+
+    # Definir la ruta de salida del archivo CSV en la misma carpeta que el script
+    output_path = os.path.join(current_dir, 'correlation_matrix.csv')
+
+    # Asegura que la ruta de salida exista, si no, la crea
+    if not os.path.exists(current_dir):
+        os.makedirs(current_dir)
+
+    # Guarda la matriz de correlaciones en un archivo .csv
+    correlation_matrix.to_csv(output_path)
+    
+    # Mostrar la ruta donde se ha guardado el archivo
+    print(f"La matriz de correlación se ha guardado en: {os.path.abspath(output_path)}")
+
+    # Configurar el tamaño de la figura
+    plt.figure(figsize=(10, 8))
+
+    # Crear la gráfica de calor (heatmap)
+    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5)
+
+    # Añadir título
+    plt.title('Matriz de Correlaciones')
+
+    # Mostrar la gráfica
+    plt.show()
+
+# Llamada a la función
+correlaciones(data)
+
+# Paso 6 TRATAMIENTO DE NA
+
+import pandas as pd
+from sklearn.impute import IterativeImputer
+
+def muestra_na(data):  
+    # Identificar las columnas con NA
+    x_na_list = data.columns[data.isnull().sum() > 0]
+    
+    if len(x_na_list) > 0:
+        # Mostrar las columnas con NA y sus tipos
+        na_info = {}
+        for column in x_na_list:
+            na_info[column] = str(data[column].dtype)
+        
+        # Imprimir las columnas con NA y su tipo
+        print("Las variables donde existen NA son:")
+        for column, dtype in na_info.items():
+            print(f"Columna: {column}, Tipo: {dtype}")
+        
+        # Crear la lista con las columnas que contienen NA
+        return x_na_list.tolist(), na_info
+    else:
+        print("No se encontraron columnas con NA.")
+        return [], {}
+    
+# Función interna para tratar las variables con valores NA
+def tratamiento_na_columna(df, columna, tipo):
+    if tipo == 'media':
+        # Reemplazar NA con la media para variables numéricas
+        if df[columna].dtype in ['float64', 'int64']:
+            media = df[columna].mean()
+            df[columna].fillna(media, inplace=True)
+            print(f"Se han sustituido los valores NA de '{columna}' por la media: {media}")
+        else:
+            print(f"La columna '{columna}' no es numérica, no se puede sustituir por la media.")
+    
+    elif tipo == 'dummy':
+        # Convertir NA en 0 y los demás en 1
+        df[columna] = df[columna].apply(lambda x: 0 if pd.isna(x) else 1)
+        print(f"Se han transformado los valores de '{columna}' en variables dummy (0 para NA, 1 para otros valores).")
+    
+    elif tipo == 'eliminar_columna':
+        # Eliminar la columna
+        del df[columna]
+        print(f"La columna '{columna}' ha sido eliminada.")
+    
+    elif tipo == 'eliminar_filas':
+        # Eliminar las filas donde existe NA en la columna
+        df.dropna(subset=[columna], inplace=True)
+        print(f"Se han eliminado las filas donde existe NA en la columna '{columna}'.")
+    
+    elif tipo == 'iterative_imputer':
+        # Sustituir NA con IterativeImputer
+        if df[columna].dtype in ['float64', 'int64']:
+            imputer = IterativeImputer(max_iter=10, random_state=0)
+            df[[columna]] = imputer.fit_transform(df[[columna]])
+            print(f"Se han proyectado los valores NA de '{columna}' utilizando IterativeImputer.")
+        else:
+            print(f"La columna '{columna}' no es numérica, no se puede sustituir por IterativeImputer.")
+
+def tratamiento_na(df):
+    # Filtrar columnas con NA
+    x_na_list = df.columns[df.isna().any()].tolist()
+
+    # Opciones iniciales de limpieza
+    print("\n¿Quieres eliminar las filas con cualquier NA en alguna columna del DataFrame?")
+    print("1. Sí, eliminar filas con NA")
+    print("2. No, continuar con el tratamiento de las columnas")
+    opcion_filas = input("Introduce el número de opción (1/2): ")
+
+    if opcion_filas == '1':
+        df.dropna(inplace=True)
+        print("Se han eliminado las filas con NA en cualquier columna del DataFrame.")
+
+    # Iterar sobre cada columna de x_na_list
+    for col in x_na_list:
+        na_count = df[col].isna().sum()
+        print(f"\nLa columna '{col}' tiene {na_count} instancias con NA.")
+        
+        # Identificar tipo de columna
+        if df[col].dtype in ['object', 'category']:
+            tipo_columna = 'categórica'
+        else:
+            tipo_columna = 'numérica'
+        
+        print(f"El tipo de la columna '{col}' es {tipo_columna}.")
+        
+        # Preguntar al usuario qué hacer con la columna
+        if tipo_columna == 'numérica':
+            print("¿Qué deseas hacer con la columna numérica?")
+            print("1. Sustituir los valores NA por la media")
+            print("2. Sustituir los valores NA utilizando IterativeImputer")
+            print("3. Eliminar las filas con NA en esta columna")
+            print("4. Transformar en dummy (NA será 0 y el resto 1)")
+            print("5. Eliminar la columna")
+        else:
+            print("¿Qué deseas hacer con la columna categórica?")
+            print("1. Transformar en dummy (NA será 0 y el resto 1)")
+            print("2. Eliminar la columna")
+            print("3. Eliminar las filas con NA en esta columna")
+
+        opcion = input("Introduce el número de opción (1/2/3/4/5): ")
+
+        if opcion == '1':
+            if tipo_columna == 'numérica':
+                tratamiento_na_columna(df, col, 'media')
+            else:
+                tratamiento_na_columna(df, col, 'dummy')
+        elif opcion == '2':
+            if tipo_columna == 'numérica':
+                tratamiento_na_columna(df, col, 'iterative_imputer')
+            else:
+                tratamiento_na_columna(df, col, 'eliminar_columna')
+        elif opcion == '3':
+            tratamiento_na_columna(df, col, 'eliminar_filas')
+        elif opcion == '4':
+            if tipo_columna == 'numérica':
+                tratamiento_na_columna(df, col, 'dummy')
+            else:
+                print("Opción no válida para columna categórica.")
+        elif opcion == '5':
+            tratamiento_na_columna(df, col, 'eliminar_columna')
+        else:
+            print("Opción no válida. No se hizo ningún cambio en la columna.")
+
+    # Mostrar el DataFrame modificado
+    print("\nDataFrame después de las modificaciones:")
+    print(df)
+
+    print("El tratamiento de las variables con NA se ha realizado con éxito.")
+
+# Llamada a la función
+# tratamiento_na(data)  # Descomenta esta línea y pasa el DataFrame a la función
+    
+
+# PASO 7 INSPECCIÖN GRÁFICA EN COLUMNAS NUMÉRICAS
+
+def inspeccion_gráfica(data):
+    # Seleccionamos solo las columnas numéricas del DataFrame
+    data_numeric = data.select_dtypes(include=['number'])
+
+    # Configurar el tamaño de la figura para que se acomoden varias gráficas
+    plt.figure(figsize=(12, len(data_numeric.columns) * 4))  # Asegura que haya suficiente espacio vertical
+
+    # Crear un boxplot para cada variable numérica
+    for i, column in enumerate(data_numeric.columns, 1):
+        # Cambiar la configuración de subplot para que las gráficas estén en una sola columna
+        plt.subplot(len(data_numeric.columns), 1, i)  # Una columna y varias filas
+        sns.boxplot(x=data_numeric[column], color='skyblue', width=0.5)
+        plt.title(f'Boxplot de {column}')
+
+    # Ajusta el diseño para que no se solapen las gráficas
+    plt.tight_layout()
+
+    # Mostrar las gráficas
+    plt.show()
+
+# Llamada a la función
+inspeccion_gráfica(data)
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Paso 4.2 Se muestran las variables dentro del dataframe
+
+columnas = df.columns
+print(df.columns)
+
+
+for column in df.columns:
+    # Preguntar al usuario qué desea hacer con la columna
+    print(f"\n¿Qué desea hacer con la columna '{column}'?")
+    decision = input("Escriba 'dummy' para convertir a dummy, 'conservar' para no hacer cambios o 'eliminar' para eliminarla: ").lower()
+
+    if decision == 'dummy':
+        # Convertir la columna en dummies y reemplazar la columna original
+        df = pd.concat([df, pd.get_dummies(df[column], dtype='uint8', prefix=column)], axis=1)
+        df.drop(column, axis=1, inplace=True)  # Eliminar la columna original después de crear los dummies
+        print(f"La columna '{column}' ha sido convertida a dummies.")
+    
+    elif decision == 'eliminar':
+        # Eliminar la columna
+        df.drop(column, axis=1, inplace=True)
+        print(f"La columna '{column}' ha sido eliminada.")
+    
+    elif decision == 'conservar':
+        # Si decide conservarla, no hacemos nada (no es necesario hacer nada adicional)
+        print(f"La columna '{column}' ha sido conservada.")
+    
+    else:
+        # Si el usuario ingresa una opción no válida, informamos
+        print("Opción no válida. La columna no ha sido modificada.")
+
+# Mostramos el DataFrame resultante
+print("\nDataFrame final después de las modificaciones:")
+print(column)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+datosfinal=pd.concat([data, dmSex.female,dmEmbarked], axis=1)
+
+
+# Paso 7.Eliminamos las variables originales que hemos transformado
+
+del datosfinal['Sex']
+del datosfinal['Embarked']
+print(datosfinal)
+
+print(datosfinal.columns)
+
+
+# NORMALIZAR LOS DATOS Y PONER EN EL MISMO CÓDIGO LAS DUMMIES
+
+datosfinal.dtypes
+
+a=pd.DataFrame(datosfinal.dtypes)
+NumNames=a[(a[0]=="float")]
+NumNamesInt=a[(a[0]=="int64")]
+NumNamesObj=a[(a[0]=="uint8")]
+
+
+datosNum=pd.DataFrame(datosfinal.select_dtypes(include=[float]).to_numpy(),columns=NumNames.index)
+datosNumInt=pd.DataFrame(datosfinal.select_dtypes(include=[np.int64]).to_numpy(),columns=NumNamesInt.index)
+datosNumObj=pd.DataFrame(datosfinal.select_dtypes(include=[np.uint8]).to_numpy(),columns=NumNamesObj.index)
+
+datosAnorm=pd.concat([datosNum,datosNumInt],axis=1)
+
+from sklearn import preprocessing
+datosNorm=preprocessing.scale(datosAnorm)
+datosNorm=pd.DataFrame(datosNorm)
+datosNorm.columns=datosAnorm.columns
+
+datosNumObj=datosNumObj.astype(np.int64)
+
+datosNumObj.dtypes
+print(datosNumObj)
+
+datosfinalNorm=pd.concat([datosNumObj,datosNorm],axis=1)
+
+
+# DIVIDIR LOS DATOS PARA TRAIN Y TEST (Esto va a cambiar dependiendo del modelo que queramos ejecutar)
+
+
+#paso 8. Separamos los datos en training y test
+
+muestra = 712*0.75
+print(muestra)
+
+train_data = datosfinal[:534]
+test_data = datosfinal[534:]
+
+#paso 9. Separamos las variables explicativas y la variable a predecir en train
+
+train_data_X = train_data.drop(['Survived'], axis = 1)
+train_data_y = train_data['Survived']
+
+#paso 10. Separamos las vaariables explicativas y la variable a predecir en test
+
+test_data_X = test_data.drop(['Survived'], axis = 1)
+test_data_y = test_data['Survived']
